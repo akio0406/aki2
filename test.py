@@ -20,7 +20,9 @@ def fetch_grow_garden_stock():
         sections = {
             "🌱 <b>Seed Shop</b>": 'Current Seed Shop Stock in Grow a Garden',
             "🛠 <b>Gear Shop</b>": 'Current Gear Shop Stock in Grow a Garden',
-            "🥚 <b>Egg Shop</b>": 'Current Egg Shop Stock in Grow a Garden'
+            "🥚 <b>Egg Shop</b>": 'Current Egg Shop Stock in Grow a Garden',
+            "🎀 <b>Cosmetics Shop</b>": 'Current Cosmetics Stock in Grow a Garden',
+            "🐝 <b>Bee Event Stock</b>": 'Current Blood Stock in Grow a Garden'
         }
 
         message_parts = [
