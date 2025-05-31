@@ -1,7 +1,7 @@
 import requests
 from bs4 import BeautifulSoup
 from telegram import Bot
-import time
+import asyncio
 
 # === CONFIGURATION ===
 TELEGRAM_TOKEN = '7618039183:AAFnEBqkEnscwEyV3QJGvitbFQ62MnBNzIo'
@@ -52,13 +52,13 @@ def fetch_grow_garden_stock():
         print("Error fetching stock:", e)
         return ""
 
-def send_stock_to_telegram(message):
+async def send_stock_to_telegram(message):
     try:
-        bot.send_message(chat_id=CHANNEL_ID, text=message, parse_mode="HTML", disable_web_page_preview=True)
+        await bot.send_message(chat_id=CHANNEL_ID, text=message, parse_mode="HTML", disable_web_page_preview=True)
     except Exception as e:
         print("Failed to send message:", e)
 
-def check_and_post_updates():
+async def check_and_post_updates():
     global last_posted_data
     message = fetch_grow_garden_stock()
     if not message:
@@ -67,15 +67,17 @@ def check_and_post_updates():
 
     if message != last_posted_data:
         print("New stock update found. Sending...")
-        send_stock_to_telegram(message)
+        await send_stock_to_telegram(message)
         last_posted_data = message
     else:
         print("Stock unchanged. No message sent.")
 
-# === Continuous 1-Second Polling Loop ===
-print("Bot started. Checking Grow a Garden stock every 1 second.")
-check_and_post_updates()  # Run once on start
+async def main():
+    print("Bot started. Checking Grow a Garden stock every 1 second.")
+    await check_and_post_updates()  # Run once on start
+    while True:
+        await check_and_post_updates()
+        await asyncio.sleep(1)
 
-while True:
-    check_and_post_updates()
-    time.sleep(1)
+if __name__ == "__main__":
+    asyncio.run(main())
