@@ -2,6 +2,7 @@ import requests
 from bs4 import BeautifulSoup
 from telegram import Bot
 import asyncio
+import time
 
 # === CONFIGURATION ===
 TELEGRAM_TOKEN = '7618039183:AAFnEBqkEnscwEyV3QJGvitbFQ62MnBNzIo'
@@ -12,74 +13,49 @@ last_posted_data = ""
 
 def fetch_grow_garden_stock():
     url = 'https://growagarden.gg/stocks'
-    try:
-        response = requests.get(url, timeout=10)
-        response.raise_for_status()
-        soup = BeautifulSoup(response.text, 'html.parser')
 
-        legacy_sections = {
-            "🌱 <b>Seed Shop</b>": 'Current Seed Shop Stock in Grow a Garden',
-            "🛠 <b>Gear Shop</b>": 'Current Gear Shop Stock in Grow a Garden',
-            "🥚 <b>Egg Shop</b>": 'Current Egg Shop Stock in Grow a Garden'
-        }
+    for attempt in range(3):  # Retry up to 3 times
+        try:
+            response = requests.get(url, timeout=20)
+            response.raise_for_status()
+            soup = BeautifulSoup(response.text, 'html.parser')
+            break  # Exit loop on success
+        except Exception as e:
+            print(f"[Attempt {attempt + 1}/3] Error fetching stock:", e)
+            time.sleep(2)
+    else:
+        return ""
 
-        message_parts = [
-            "<pre>┏━━━━━━━━━━━━━━━━━━━━━━┓</pre>",
-            "<b>🌼 Grow a Garden Stock Update</b>",
-            "<pre>┗━━━━━━━━━━━━━━━━━━━━━━┛</pre>\n"
-        ]
+    legacy_sections = {
+        "🌱 <b>Seed Shop</b>": 'Current Seed Shop Stock in Grow a Garden',
+        "🛠 <b>Gear Shop</b>": 'Current Gear Shop Stock in Grow a Garden',
+        "🥚 <b>Egg Shop</b>": 'Current Egg Shop Stock in Grow a Garden'
+    }
 
-        # Legacy sections using <h3>
-        for emoji_title, header_text in legacy_sections.items():
-            h3 = soup.find('h3', string=header_text)
-            if h3:
-                ul = h3.find_next('ul')
-                items = [li.get_text(strip=True) for li in ul.find_all('li')] if ul else []
-                section_block = (
-                    f"<pre>┌──────────────────────┐</pre>\n"
-                    f"{emoji_title}\n" +
-                    "\n".join(f"• {item}" for item in items) +
-                    "\n<pre>└──────────────────────┘</pre>\n"
-                )
-                message_parts.append(section_block)
-            else:
-                message_parts.append(
-                    f"<pre>┌──────────────────────┐</pre>\n{emoji_title}\n• Not Found\n<pre>└──────────────────────┘</pre>\n"
-                )
+    message_parts = [
+        "<pre>┏━━━━━━━━━━━━━━━━━━━━━━┓</pre>",
+        "<b>🌼 Grow a Garden Stock Update</b>",
+        "<pre>┗━━━━━━━━━━━━━━━━━━━━━━┛</pre>\n"
+    ]
 
-        # Custom extraction for Cosmetics and Blood Stock (Bee Event)
-        def extract_custom_section(title, emoji, override_title=None):
-            h2 = soup.find('h2', string=title)
-            if not h2:
-                return f"<pre>┌──────────────────────┐</pre>\n{emoji} <b>{override_title or title}</b>\n• Not Found\n<pre>└──────────────────────┘</pre>\n"
-
-            container = h2.find_parent().find_next_sibling()
-            items = []
-            if container:
-                cards = container.find_all("div", recursive=False)
-                for card in cards:
-                    name_tag = card.find("div", class_=lambda x: x and "name" in x)
-                    if name_tag:
-                        name = name_tag.get_text(strip=True)
-                        items.append(f"• {name}")
-
-            if not items:
-                items.append("• Not Found")
-            return (
+    for emoji_title, header_text in legacy_sections.items():
+        h3 = soup.find('h3', string=header_text)
+        if h3:
+            ul = h3.find_next('ul')
+            items = [li.get_text(strip=True) for li in ul.find_all('li')] if ul else []
+            section_block = (
                 f"<pre>┌──────────────────────┐</pre>\n"
-                f"{emoji} <b>{override_title or title}</b>\n" +
-                "\n".join(items) +
+                f"{emoji_title}\n" +
+                "\n".join(f"• {item}" for item in items) +
                 "\n<pre>└──────────────────────┘</pre>\n"
             )
+            message_parts.append(section_block)
+        else:
+            message_parts.append(
+                f"<pre>┌──────────────────────┐</pre>\n{emoji_title}\n• Not Found\n<pre>└──────────────────────┘</pre>\n"
+            )
 
-        message_parts.append(extract_custom_section("Cosmetics Stock", "🎀", "Cosmetics Shop"))
-        message_parts.append(extract_custom_section("Blood Stock", "🐝", "Bee Event Stock"))
-
-        return "\n".join(message_parts).strip()
-
-    except Exception as e:
-        print("Error fetching stock:", e)
-        return ""
+    return "\n".join(message_parts).strip()
 
 async def send_stock_to_telegram(message):
     try:
@@ -102,11 +78,11 @@ async def check_and_post_updates():
         print("Stock unchanged. No message sent.")
 
 async def main():
-    print("Bot started. Checking Grow a Garden stock every 1 second.")
+    print("Bot started. Checking Grow a Garden stock every 30 seconds.")
     await check_and_post_updates()  # Run once on start
     while True:
         await check_and_post_updates()
-        await asyncio.sleep(1)
+        await asyncio.sleep(30)
 
 if __name__ == "__main__":
     asyncio.run(main())
