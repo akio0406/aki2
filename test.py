@@ -2,7 +2,6 @@ import requests
 from bs4 import BeautifulSoup
 from telegram import Bot
 import asyncio
-import time
 
 # === CONFIGURATION ===
 TELEGRAM_TOKEN = '7618039183:AAFnEBqkEnscwEyV3QJGvitbFQ62MnBNzIo'
@@ -45,36 +44,28 @@ item_notifications = {
 
 bot = Bot(token=TELEGRAM_TOKEN)
 last_posted_data = ""
+stock_message_id = None
+mention_message_id = None
 
 def fetch_grow_garden_stock():
-    arcaiuz_url = 'https://arcaiuz.com/grow-a-garden-stock'
     vulcan_url = 'https://www.vulcanvalues.com/grow-a-garden/stock'
 
-    # --- Get Weather ---
-    try:
-        arc_response = requests.get(arcaiuz_url, timeout=10)
-        arc_response.raise_for_status()
-        arc_soup = BeautifulSoup(arc_response.text, 'html.parser')
-
-        weather_div = arc_soup.find('div', string=lambda x: x and "Weather" in x)
-        if not weather_div:
-            weather_text = ""
-        else:
-            weather_text = weather_div.find_next().get_text(strip=True)
-    except Exception as e:
-        print("⚠️ Failed to fetch weather:", e)
-        weather_text = ""
-
-    if not weather_text:
-        return "", []
-
-    # --- Get Stock ---
     try:
         response = requests.get(vulcan_url, timeout=10)
         response.raise_for_status()
         soup = BeautifulSoup(response.text, 'html.parser')
     except Exception as e:
         print("⚠️ Failed to fetch stock:", e)
+        return "", []
+
+    try:
+        weather_elem = soup.find('div', class_='weather-box')
+        weather_text = weather_elem.get_text(strip=True) if weather_elem else ""
+    except Exception as e:
+        print("⚠️ Failed to extract weather:", e)
+        weather_text = ""
+
+    if not weather_text:
         return "", []
 
     sections = {
@@ -123,6 +114,7 @@ def fetch_grow_garden_stock():
     return "\n".join(message_parts).strip(), found_items
 
 async def send_mentions_to_discussion(found_items):
+    global mention_message_id
     user_items = {}
 
     for item in found_items:
@@ -146,17 +138,21 @@ async def send_mentions_to_discussion(found_items):
         message_blocks.append(block)
 
     try:
-        await bot.send_message(
+        if mention_message_id:
+            await bot.delete_message(chat_id=DISCUSSION_ID, message_id=mention_message_id)
+
+        sent = await bot.send_message(
             chat_id=DISCUSSION_ID,
             text="\n\n".join(message_blocks),
             parse_mode="HTML"
         )
+        mention_message_id = sent.message_id
         print("✅ Stylish mention message sent to discussion.")
     except Exception as e:
-        print("❌ Failed to send stylish mention message:", e)
+        print("❌ Failed to send mention message:", e)
 
 async def check_and_post_updates():
-    global last_posted_data
+    global last_posted_data, stock_message_id
     message, found_items = fetch_grow_garden_stock()
     if not message:
         print("⛅ No weather or stock message available. Skipping.")
@@ -166,12 +162,16 @@ async def check_and_post_updates():
         print("📢 New stock + weather update. Sending...")
 
         try:
-            await bot.send_message(
+            if stock_message_id:
+                await bot.delete_message(chat_id=DISCUSSION_ID, message_id=stock_message_id)
+
+            sent = await bot.send_message(
                 chat_id=DISCUSSION_ID,
                 text=message,
                 parse_mode="HTML",
                 disable_web_page_preview=True
             )
+            stock_message_id = sent.message_id
             print("✅ Stock update sent to discussion.")
         except Exception as e:
             print("❌ Failed to send stock update:", e)
