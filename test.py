@@ -7,7 +7,7 @@ import time
 # === CONFIGURATION ===
 TELEGRAM_TOKEN = '7618039183:AAFnEBqkEnscwEyV3QJGvitbFQ62MnBNzIo'
 CHANNEL_ID = '@AKIsMainCh'
-DISCUSSION_ID = -1002550083327  # <- Replace this with your actual discussion group ID
+DISCUSSION_ID = -1002534125875  # <- Replace this with your actual discussion group ID
 
 item_notifications = {
     "Carrot": ["@thatkidAki", "@otheruser"],
