@@ -18,7 +18,7 @@ item_notifications = {
     "Bamboo": [],
     "Watermelon": [],
     "Apple": [],
-    "Pepper": [],
+    "Pepper": ["@thatkidAki"],
     "Mango": [],
     "Daffodil": [],
     "Pumpkin": [],
