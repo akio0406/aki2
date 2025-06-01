@@ -25,7 +25,7 @@ item_notifications = {
     "Corn": [],
     "Coconut": [],
     "Cactus": [],
-    "Cacao": ["@eeevee2", "@thatkidAki", "@kamonohashi12", "@zyrillkyato1",
+    "Cacao": ["@eeevee2", "@thatkidAki", "@kamonohashi12", "@zyrillkyato1"],
     "Dragon Fruit": [],
     "Grape": ["@kamonohashi12"],
     "Mushroom": ["@thatkidAki", "@zyrillkyato1"],
@@ -42,6 +42,7 @@ item_notifications = {
     "Bug Egg": [],
     "Mythic Egg": []
 }
+
 
 bot = Bot(token=TELEGRAM_TOKEN)
 last_posted_data = ""
