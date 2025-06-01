@@ -119,22 +119,39 @@ async def send_stock_to_telegram(message):
         return None
 
 async def send_mentions_to_discussion(found_items):
-    users_to_notify = set()
+    # Reverse map: username → [items]
+    user_items = {}
 
     for item in found_items:
-        if item in item_notifications:
-            users_to_notify.update(item_notifications[item])
+        for user in item_notifications.get(item, []):
+            user_items.setdefault(user, []).append(item)
 
-    if users_to_notify:
-        text = "🔔 " + ", ".join(users_to_notify)
-        try:
-            await bot.send_message(
-                chat_id=DISCUSSION_ID,
-                text=text
-            )
-            print("✅ Mention message sent to discussion.")
-        except Exception as e:
-            print("❌ Failed to send mention message:", e)
+    if not user_items:
+        print("ℹ️ No users to notify.")
+        return
+
+    message_blocks = []
+    for user, items in user_items.items():
+        if not items:
+            continue
+        box_width = max(len(user), max(len(i) for i in items)) + 4
+        top = f"┏{'━' * (box_width)}┓"
+        bottom = f"┗{'━' * (box_width)}┛"
+        user_line = f"{user}".ljust(box_width)
+        item_lines = [f"┣ {item}" for item in items]
+        block = "\n".join([top, user_line] + item_lines + [bottom])
+        message_blocks.append(block)
+
+    try:
+        await bot.send_message(
+            chat_id=DISCUSSION_ID,
+            text="\n\n".join(message_blocks),
+            parse_mode="HTML"
+        )
+        print("✅ Stylish mention message sent to discussion.")
+    except Exception as e:
+        print("❌ Failed to send stylish mention message:", e)
+
 
 async def check_and_post_updates():
     global last_posted_data
