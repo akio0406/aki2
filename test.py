@@ -6,9 +6,9 @@ import time
 
 # === CONFIGURATION ===
 TELEGRAM_TOKEN = '7618039183:AAFnEBqkEnscwEyV3QJGvitbFQ62MnBNzIo'
-CHANNEL_ID = '@AKIsMainCh'
-DISCUSSION_ID = -1002534125875  # Your actual discussion group ID
+DISCUSSION_ID = -1002534125875  # Your discussion group ID
 
+# Item → list of users to notify
 item_notifications = {
     "Carrot": [],
     "Strawberry": [],
@@ -91,32 +91,19 @@ def fetch_grow_garden_stock():
                         found_items.append(cleaned)
                         items.append(f"• {item_text}")
                 sibling = sibling.find_next_sibling()
-            if items:
-                section_block = (
-                    f"<pre>┌──────────────────────┐</pre>\n"
-                    f"{emoji_title}\n" +
-                    "\n".join(items) +
-                    "\n<pre>└──────────────────────┘</pre>\n"
-                )
-                message_parts.append(section_block)
-            else:
-                message_parts.append(
-                    f"<pre>┌──────────────────────┐</pre>\n{emoji_title}\n• Not Found\n<pre>└──────────────────────┘</pre>\n"
-                )
+            section_block = (
+                f"<pre>┌──────────────────────┐</pre>\n"
+                f"{emoji_title}\n" +
+                ("\n".join(items) if items else "• Not Found") +
+                "\n<pre>└──────────────────────┘</pre>\n"
+            )
+            message_parts.append(section_block)
         else:
             message_parts.append(
                 f"<pre>┌──────────────────────┐</pre>\n{emoji_title}\n• Not Found\n<pre>└──────────────────────┘</pre>\n"
             )
 
     return "\n".join(message_parts).strip(), found_items
-
-async def send_stock_to_telegram(message):
-    try:
-        sent_msg = await bot.send_message(chat_id=CHANNEL_ID, text=message, parse_mode="HTML", disable_web_page_preview=True)
-        return sent_msg.message_id
-    except Exception as e:
-        print("Failed to send message:", e)
-        return None
 
 async def send_mentions_to_discussion(found_items):
     # Reverse map: username → [items]
@@ -135,8 +122,8 @@ async def send_mentions_to_discussion(found_items):
         if not items:
             continue
         box_width = max(len(user), max(len(i) for i in items)) + 4
-        top = f"┏{'━' * (box_width)}┓"
-        bottom = f"┗{'━' * (box_width)}┛"
+        top = f"┏{'━' * box_width}┓"
+        bottom = f"┗{'━' * box_width}┛"
         user_line = f"{user}".ljust(box_width)
         item_lines = [f"┣ {item}" for item in items]
         block = "\n".join([top, user_line] + item_lines + [bottom])
@@ -152,7 +139,6 @@ async def send_mentions_to_discussion(found_items):
     except Exception as e:
         print("❌ Failed to send stylish mention message:", e)
 
-
 async def check_and_post_updates():
     global last_posted_data
     message, found_items = fetch_grow_garden_stock()
@@ -162,7 +148,19 @@ async def check_and_post_updates():
 
     if message != last_posted_data:
         print("New stock update found. Sending...")
-        await send_stock_to_telegram(message)
+
+        # Send stock update to the discussion group
+        try:
+            await bot.send_message(
+                chat_id=DISCUSSION_ID,
+                text=message,
+                parse_mode="HTML",
+                disable_web_page_preview=True
+            )
+            print("✅ Stock update sent to discussion.")
+        except Exception as e:
+            print("❌ Failed to send stock update to discussion:", e)
+
         await send_mentions_to_discussion(found_items)
         last_posted_data = message
     else:
