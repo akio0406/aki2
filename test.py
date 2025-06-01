@@ -5,7 +5,7 @@ import asyncio
 import time
 
 # === CONFIGURATION ===
-TELEGRAM_TOKEN = 'YOUR_BOT_TOKEN'
+TELEGRAM_TOKEN = '7618039183:AAFnEBqkEnscwEyV3QJGvitbFQ62MnBNzIo'
 DISCUSSION_ID = -1002534125875  # Your discussion group ID
 
 # Item → list of users to notify
