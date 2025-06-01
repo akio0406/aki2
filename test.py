@@ -47,18 +47,34 @@ bot = Bot(token=TELEGRAM_TOKEN)
 last_posted_data = ""
 
 def fetch_grow_garden_stock():
-    url = 'https://www.vulcanvalues.com/grow-a-garden/stock'
+    arcaiuz_url = 'https://arcaiuz.com/grow-a-garden-stock'
+    vulcan_url = 'https://www.vulcanvalues.com/grow-a-garden/stock'
 
-    for attempt in range(3):
-        try:
-            response = requests.get(url, timeout=20)
-            response.raise_for_status()
-            soup = BeautifulSoup(response.text, 'html.parser')
-            break
-        except Exception as e:
-            print(f"[Attempt {attempt + 1}/3] Error fetching stock:", e)
-            time.sleep(2)
-    else:
+    # --- Get Weather ---
+    try:
+        arc_response = requests.get(arcaiuz_url, timeout=10)
+        arc_response.raise_for_status()
+        arc_soup = BeautifulSoup(arc_response.text, 'html.parser')
+
+        weather_div = arc_soup.find('div', string=lambda x: x and "Weather" in x)
+        if not weather_div:
+            weather_text = ""
+        else:
+            weather_text = weather_div.find_next().get_text(strip=True)
+    except Exception as e:
+        print("⚠️ Failed to fetch weather:", e)
+        weather_text = ""
+
+    if not weather_text:
+        return "", []
+
+    # --- Get Stock ---
+    try:
+        response = requests.get(vulcan_url, timeout=10)
+        response.raise_for_status()
+        soup = BeautifulSoup(response.text, 'html.parser')
+    except Exception as e:
+        print("⚠️ Failed to fetch stock:", e)
         return "", []
 
     sections = {
@@ -71,7 +87,8 @@ def fetch_grow_garden_stock():
 
     message_parts = [
         "<pre>┏━━━━━━━━━━━━━━━━━━━━━━┓</pre>",
-        "<b>🌼 Grow a Garden Stock Update</b>",
+        f"<b>🌼 Grow a Garden Stock Update</b>",
+        f"<b>🌦️ Weather: {weather_text}</b>",
         "<pre>┗━━━━━━━━━━━━━━━━━━━━━━┛</pre>\n"
     ]
 
@@ -106,7 +123,6 @@ def fetch_grow_garden_stock():
     return "\n".join(message_parts).strip(), found_items
 
 async def send_mentions_to_discussion(found_items):
-    # Reverse map: username → [items]
     user_items = {}
 
     for item in found_items:
@@ -143,13 +159,12 @@ async def check_and_post_updates():
     global last_posted_data
     message, found_items = fetch_grow_garden_stock()
     if not message:
-        print("No stock message built.")
+        print("⛅ No weather or stock message available. Skipping.")
         return
 
     if message != last_posted_data:
-        print("New stock update found. Sending...")
+        print("📢 New stock + weather update. Sending...")
 
-        # Send stock update to the discussion group
         try:
             await bot.send_message(
                 chat_id=DISCUSSION_ID,
@@ -159,19 +174,19 @@ async def check_and_post_updates():
             )
             print("✅ Stock update sent to discussion.")
         except Exception as e:
-            print("❌ Failed to send stock update to discussion:", e)
+            print("❌ Failed to send stock update:", e)
 
         await send_mentions_to_discussion(found_items)
         last_posted_data = message
     else:
-        print("Stock unchanged. No message sent.")
+        print("⏸ No change. Waiting...")
 
 async def main():
-    print("Bot started. Checking Grow a Garden stock every 30 seconds.")
+    print("🔁 Bot started. Checking every second...")
     await check_and_post_updates()
     while True:
         await check_and_post_updates()
-        await asyncio.sleep(30)
+        await asyncio.sleep(1)
 
 if __name__ == "__main__":
     asyncio.run(main())
