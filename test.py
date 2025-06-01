@@ -2,6 +2,7 @@ import requests
 from bs4 import BeautifulSoup
 from telegram import Bot
 import asyncio
+import time
 
 # === CONFIGURATION ===
 TELEGRAM_TOKEN = '7618039183:AAFnEBqkEnscwEyV3QJGvitbFQ62MnBNzIo'
@@ -44,28 +45,22 @@ item_notifications = {
 
 bot = Bot(token=TELEGRAM_TOKEN)
 last_posted_data = ""
-stock_message_id = None
-mention_message_id = None
+last_found_items = set()
+last_stock_message_id = None  # NEW: Track last message ID
 
 def fetch_grow_garden_stock():
-    vulcan_url = 'https://www.vulcanvalues.com/grow-a-garden/stock'
+    url = 'https://www.vulcanvalues.com/grow-a-garden/stock'
 
-    try:
-        response = requests.get(vulcan_url, timeout=10)
-        response.raise_for_status()
-        soup = BeautifulSoup(response.text, 'html.parser')
-    except Exception as e:
-        print("⚠️ Failed to fetch stock:", e)
-        return "", []
-
-    try:
-        weather_elem = soup.find('div', class_='weather-box')
-        weather_text = weather_elem.get_text(strip=True) if weather_elem else ""
-    except Exception as e:
-        print("⚠️ Failed to extract weather:", e)
-        weather_text = ""
-
-    if not weather_text:
+    for attempt in range(3):
+        try:
+            response = requests.get(url, timeout=20)
+            response.raise_for_status()
+            soup = BeautifulSoup(response.text, 'html.parser')
+            break
+        except Exception as e:
+            print(f"[Attempt {attempt + 1}/3] Error fetching stock:", e)
+            time.sleep(2)
+    else:
         return "", []
 
     sections = {
@@ -78,8 +73,7 @@ def fetch_grow_garden_stock():
 
     message_parts = [
         "<pre>┏━━━━━━━━━━━━━━━━━━━━━━┓</pre>",
-        f"<b>🌼 Grow a Garden Stock Update</b>",
-        f"<b>🌦️ Weather: {weather_text}</b>",
+        "<b>🌼 Grow a Garden Stock Update</b>",
         "<pre>┗━━━━━━━━━━━━━━━━━━━━━━┛</pre>\n"
     ]
 
@@ -113,11 +107,10 @@ def fetch_grow_garden_stock():
 
     return "\n".join(message_parts).strip(), found_items
 
-async def send_mentions_to_discussion(found_items):
-    global mention_message_id
+async def send_mentions_to_discussion(newly_appeared_items):
     user_items = {}
 
-    for item in found_items:
+    for item in newly_appeared_items:
         for user in item_notifications.get(item, []):
             user_items.setdefault(user, []).append(item)
 
@@ -138,55 +131,62 @@ async def send_mentions_to_discussion(found_items):
         message_blocks.append(block)
 
     try:
-        if mention_message_id:
-            await bot.delete_message(chat_id=DISCUSSION_ID, message_id=mention_message_id)
-
-        sent = await bot.send_message(
+        await bot.send_message(
             chat_id=DISCUSSION_ID,
             text="\n\n".join(message_blocks),
             parse_mode="HTML"
         )
-        mention_message_id = sent.message_id
         print("✅ Stylish mention message sent to discussion.")
     except Exception as e:
-        print("❌ Failed to send mention message:", e)
+        print("❌ Failed to send stylish mention message:", e)
 
 async def check_and_post_updates():
-    global last_posted_data, stock_message_id
-    message, found_items = fetch_grow_garden_stock()
+    global last_posted_data, last_found_items, last_stock_message_id
+
+    message, current_found_items = fetch_grow_garden_stock()
     if not message:
-        print("⛅ No weather or stock message available. Skipping.")
+        print("No stock message built.")
         return
 
+    current_found_set = set(current_found_items)
+    new_items = current_found_set - last_found_items
+
     if message != last_posted_data:
-        print("📢 New stock + weather update. Sending...")
+        print("New stock update found. Sending...")
 
+        # Delete previous stock message if exists
+        if last_stock_message_id:
+            try:
+                await bot.delete_message(chat_id=DISCUSSION_ID, message_id=last_stock_message_id)
+                print("🗑️ Deleted old stock message.")
+            except Exception as e:
+                print("⚠️ Failed to delete old stock message:", e)
+
+        # Send new stock message
         try:
-            if stock_message_id:
-                await bot.delete_message(chat_id=DISCUSSION_ID, message_id=stock_message_id)
-
-            sent = await bot.send_message(
+            sent_msg = await bot.send_message(
                 chat_id=DISCUSSION_ID,
                 text=message,
                 parse_mode="HTML",
                 disable_web_page_preview=True
             )
-            stock_message_id = sent.message_id
             print("✅ Stock update sent to discussion.")
+            last_stock_message_id = sent_msg.message_id
         except Exception as e:
-            print("❌ Failed to send stock update:", e)
+            print("❌ Failed to send stock update to discussion:", e)
 
-        await send_mentions_to_discussion(found_items)
+        await send_mentions_to_discussion(new_items)
         last_posted_data = message
+        last_found_items = current_found_set
     else:
-        print("⏸ No change. Waiting...")
+        print("Stock unchanged. No message sent.")
 
 async def main():
-    print("🔁 Bot started. Checking every second...")
+    print("Bot started. Checking Grow a Garden stock every 5 seconds.")
     await check_and_post_updates()
     while True:
         await check_and_post_updates()
-        await asyncio.sleep(1)
+        await asyncio.sleep(5)
 
 if __name__ == "__main__":
     asyncio.run(main())
