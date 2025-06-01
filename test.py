@@ -26,10 +26,13 @@ def fetch_grow_garden_stock():
     else:
         return ""
 
-    legacy_sections = {
-        "🌱 <b>Seed Shop</b>": 'Current Seed Shop Stock in Grow a Garden',
-        "🛠 <b>Gear Shop</b>": 'Current Gear Shop Stock in Grow a Garden',
-        "🥚 <b>Egg Shop</b>": 'Current Egg Shop Stock in Grow a Garden'
+    # Define the sections to extract
+    sections = {
+        "SEEDS STOCK": "🌱 Seed Shop",
+        "GEAR STOCK": "🛠 Gear Shop",
+        "EGG STOCK": "🥚 Egg Shop",
+        "HONEY STOCK": "🐝 Bee Event Stock",
+        "COSMETICS STOCK": "🎀 Cosmetics Shop"
     }
 
     message_parts = [
@@ -38,51 +41,36 @@ def fetch_grow_garden_stock():
         "<pre>┗━━━━━━━━━━━━━━━━━━━━━━┛</pre>\n"
     ]
 
-    # Legacy sections
-    for emoji_title, header_text in legacy_sections.items():
-        h3 = soup.find('h3', string=header_text)
-        if h3:
-            ul = h3.find_next('ul')
-            items = [li.get_text(strip=True) for li in ul.find_all('li')] if ul else []
-            section_block = (
-                f"<pre>┌──────────────────────┐</pre>\n"
-                f"{emoji_title}\n" +
-                "\n".join(f"• {item}" for item in items) +
-                "\n<pre>└──────────────────────┘</pre>\n"
-            )
-            message_parts.append(section_block)
+    for header_text, emoji_title in sections.items():
+        header = soup.find('h2', string=lambda x: x and header_text in x)
+        if header:
+            items = []
+            # Find the next sibling elements containing the stock items
+            sibling = header.find_next_sibling()
+            while sibling and sibling.name != 'h2':
+                # Look for list items within the sibling
+                list_items = sibling.find_all('li')
+                for li in list_items:
+                    item_text = li.get_text(strip=True)
+                    if item_text:
+                        items.append(f"• {item_text}")
+                sibling = sibling.find_next_sibling()
+            if items:
+                section_block = (
+                    f"<pre>┌──────────────────────┐</pre>\n"
+                    f"{emoji_title}\n" +
+                    "\n".join(items) +
+                    "\n<pre>└──────────────────────┘</pre>\n"
+                )
+                message_parts.append(section_block)
+            else:
+                message_parts.append(
+                    f"<pre>┌──────────────────────┐</pre>\n{emoji_title}\n• Not Found\n<pre>└──────────────────────┘</pre>\n"
+                )
         else:
             message_parts.append(
                 f"<pre>┌──────────────────────┐</pre>\n{emoji_title}\n• Not Found\n<pre>└──────────────────────┘</pre>\n"
             )
-
-    # Cosmetics and Bee Event Stock
-    def extract_custom_section(title, emoji, override_title=None):
-        h2 = soup.find('h2', string=title)
-        if not h2:
-            return f"<pre>┌──────────────────────┐</pre>\n{emoji} <b>{override_title or title}</b>\n• Not Found\n<pre>└──────────────────────┘</pre>\n"
-
-        container = h2.find_parent().find_next_sibling()
-        items = []
-        if container:
-            cards = container.find_all("div", recursive=False)
-            for card in cards:
-                name_tag = card.find("div", class_=lambda x: x and "name" in x)
-                if name_tag:
-                    name = name_tag.get_text(strip=True)
-                    items.append(f"• {name}")
-
-        if not items:
-            items.append("• Not Found")
-        return (
-            f"<pre>┌──────────────────────┐</pre>\n"
-            f"{emoji} <b>{override_title or title}</b>\n" +
-            "\n".join(items) +
-            "\n<pre>└──────────────────────┘</pre>\n"
-        )
-
-    message_parts.append(extract_custom_section("Cosmetics Stock", "🎀", "Cosmetics Shop"))
-    message_parts.append(extract_custom_section("Blood Stock", "🐝", "Bee Event Stock"))
 
     return "\n".join(message_parts).strip()
 
