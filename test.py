@@ -5,9 +5,9 @@ import asyncio
 import time
 
 # === CONFIGURATION ===
-TELEGRAM_TOKEN = 'your_bot_token'
+TELEGRAM_TOKEN = '7618039183:AAFnEBqkEnscwEyV3QJGvitbFQ62MnBNzIo'
 CHANNEL_ID = '@AKIsMainCh'
-DISCUSSION_ID = -1001234567890  # <- Replace this with your actual discussion group ID
+DISCUSSION_ID = -1002550083327  # <- Replace this with your actual discussion group ID
 
 item_notifications = {
     "Carrot": ["@thatkidAki", "@otheruser"],
