@@ -5,7 +5,7 @@ import asyncio
 import time
 
 # === CONFIGURATION ===
-TELEGRAM_TOKEN = '7618039183:AAFnEBqkEnscwEyV3QJGvitbFQ62MnBNzIo'
+TELEGRAM_TOKEN = 'YOUR_BOT_TOKEN'
 DISCUSSION_ID = -1002534125875  # Your discussion group ID
 
 # Item → list of users to notify
@@ -43,11 +43,11 @@ item_notifications = {
     "Mythic Egg": []
 }
 
-
 bot = Bot(token=TELEGRAM_TOKEN)
 last_posted_data = ""
 last_found_items = set()
-last_stock_message_id = None  # NEW: Track last message ID
+last_stock_message_id = None
+last_mentions_message_id = None
 
 def fetch_grow_garden_stock():
     url = 'https://www.vulcanvalues.com/grow-a-garden/stock'
@@ -109,6 +109,8 @@ def fetch_grow_garden_stock():
     return "\n".join(message_parts).strip(), found_items
 
 async def send_mentions_to_discussion(newly_appeared_items):
+    global last_mentions_message_id
+
     user_items = {}
 
     for item in newly_appeared_items:
@@ -132,11 +134,20 @@ async def send_mentions_to_discussion(newly_appeared_items):
         message_blocks.append(block)
 
     try:
-        await bot.send_message(
+        # Delete previous mention message if exists
+        if last_mentions_message_id:
+            try:
+                await bot.delete_message(chat_id=DISCUSSION_ID, message_id=last_mentions_message_id)
+                print("🗑️ Deleted old mentions message.")
+            except Exception as e:
+                print("⚠️ Failed to delete old mentions message:", e)
+
+        sent_msg = await bot.send_message(
             chat_id=DISCUSSION_ID,
             text="\n\n".join(message_blocks),
             parse_mode="HTML"
         )
+        last_mentions_message_id = sent_msg.message_id
         print("✅ Stylish mention message sent to discussion.")
     except Exception as e:
         print("❌ Failed to send stylish mention message:", e)
@@ -153,9 +164,9 @@ async def check_and_post_updates():
     new_items = current_found_set - last_found_items
 
     if message != last_posted_data:
-        print("New stock update found. Sending...")
+        print("📦 New stock update found. Sending...")
 
-        # Delete previous stock message if exists
+        # Delete previous stock message
         if last_stock_message_id:
             try:
                 await bot.delete_message(chat_id=DISCUSSION_ID, message_id=last_stock_message_id)
@@ -171,16 +182,19 @@ async def check_and_post_updates():
                 parse_mode="HTML",
                 disable_web_page_preview=True
             )
-            print("✅ Stock update sent to discussion.")
             last_stock_message_id = sent_msg.message_id
+            print("✅ Stock update sent.")
         except Exception as e:
-            print("❌ Failed to send stock update to discussion:", e)
+            print("❌ Failed to send stock update:", e)
 
+        # Send mentions
         await send_mentions_to_discussion(new_items)
+
+        # Update tracking
         last_posted_data = message
         last_found_items = current_found_set
     else:
-        print("Stock unchanged. No message sent.")
+        print("📭 Stock unchanged. No new message.")
 
 async def main():
     print("Bot started. Checking Grow a Garden stock every 5 seconds.")
