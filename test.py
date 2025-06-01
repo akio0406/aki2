@@ -12,7 +12,7 @@ bot = Bot(token=TELEGRAM_TOKEN)
 last_posted_data = ""
 
 def fetch_grow_garden_stock():
-    url = 'https://growagarden.gg/stocks'
+    url = 'https://www.vulcanvalues.com/grow-a-garden/stock'
 
     for attempt in range(3):  # Retry up to 3 times
         try:
@@ -38,6 +38,7 @@ def fetch_grow_garden_stock():
         "<pre>┗━━━━━━━━━━━━━━━━━━━━━━┛</pre>\n"
     ]
 
+    # Legacy sections
     for emoji_title, header_text in legacy_sections.items():
         h3 = soup.find('h3', string=header_text)
         if h3:
@@ -54,6 +55,34 @@ def fetch_grow_garden_stock():
             message_parts.append(
                 f"<pre>┌──────────────────────┐</pre>\n{emoji_title}\n• Not Found\n<pre>└──────────────────────┘</pre>\n"
             )
+
+    # Cosmetics and Bee Event Stock
+    def extract_custom_section(title, emoji, override_title=None):
+        h2 = soup.find('h2', string=title)
+        if not h2:
+            return f"<pre>┌──────────────────────┐</pre>\n{emoji} <b>{override_title or title}</b>\n• Not Found\n<pre>└──────────────────────┘</pre>\n"
+
+        container = h2.find_parent().find_next_sibling()
+        items = []
+        if container:
+            cards = container.find_all("div", recursive=False)
+            for card in cards:
+                name_tag = card.find("div", class_=lambda x: x and "name" in x)
+                if name_tag:
+                    name = name_tag.get_text(strip=True)
+                    items.append(f"• {name}")
+
+        if not items:
+            items.append("• Not Found")
+        return (
+            f"<pre>┌──────────────────────┐</pre>\n"
+            f"{emoji} <b>{override_title or title}</b>\n" +
+            "\n".join(items) +
+            "\n<pre>└──────────────────────┘</pre>\n"
+        )
+
+    message_parts.append(extract_custom_section("Cosmetics Stock", "🎀", "Cosmetics Shop"))
+    message_parts.append(extract_custom_section("Blood Stock", "🐝", "Bee Event Stock"))
 
     return "\n".join(message_parts).strip()
 
