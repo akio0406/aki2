@@ -7,7 +7,7 @@ import time
 # === CONFIGURATION ===
 TELEGRAM_TOKEN = '7618039183:AAFnEBqkEnscwEyV3QJGvitbFQ62MnBNzIo'
 CHANNEL_ID = '@AKIsMainCh'
-DISCUSSION_ID = -1002534125875  # Replace with your discussion group ID
+DISCUSSION_ID = -1002534125875  # Your actual discussion group ID
 
 item_notifications = {
     "Carrot": ["@thatkidAki", "@otheruser"],
@@ -87,7 +87,7 @@ def fetch_grow_garden_stock():
                 for li in list_items:
                     item_text = li.get_text(strip=True)
                     if item_text:
-                        cleaned = item_text.split(' x')[0].strip()
+                        cleaned = item_text.split('x')[0].strip()
                         found_items.append(cleaned)
                         items.append(f"• {item_text}")
                 sibling = sibling.find_next_sibling()
@@ -118,7 +118,7 @@ async def send_stock_to_telegram(message):
         print("Failed to send message:", e)
         return None
 
-async def reply_with_mentions(found_items):
+async def send_mentions_to_discussion(found_items):
     users_to_notify = set()
 
     for item in found_items:
@@ -132,9 +132,9 @@ async def reply_with_mentions(found_items):
                 chat_id=DISCUSSION_ID,
                 text=text
             )
-            print("✅ Mention sent to discussion.")
+            print("✅ Mention message sent to discussion.")
         except Exception as e:
-            print("❌ Failed to send mention to discussion:", e)
+            print("❌ Failed to send mention message:", e)
 
 async def check_and_post_updates():
     global last_posted_data
@@ -145,9 +145,8 @@ async def check_and_post_updates():
 
     if message != last_posted_data:
         print("New stock update found. Sending...")
-        message_id = await send_stock_to_telegram(message)
-        if message_id:
-            await reply_with_mentions(found_items)
+        await send_stock_to_telegram(message)
+        await send_mentions_to_discussion(found_items)
         last_posted_data = message
     else:
         print("Stock unchanged. No message sent.")
