@@ -7,7 +7,7 @@ import time
 # === CONFIGURATION ===
 TELEGRAM_TOKEN = '7618039183:AAFnEBqkEnscwEyV3QJGvitbFQ62MnBNzIo'
 CHANNEL_ID = '@AKIsMainCh'
-DISCUSSION_ID = -1002534125875  # <- Replace this with your actual discussion group ID
+DISCUSSION_ID = -1002534125875  # Replace with your discussion group ID
 
 item_notifications = {
     "Carrot": ["@thatkidAki", "@otheruser"],
@@ -42,7 +42,6 @@ item_notifications = {
     "Bug Egg": [],
     "Mythic Egg": []
 }
-
 
 bot = Bot(token=TELEGRAM_TOKEN)
 last_posted_data = ""
@@ -119,7 +118,7 @@ async def send_stock_to_telegram(message):
         print("Failed to send message:", e)
         return None
 
-async def reply_with_mentions(found_items, original_message_id):
+async def reply_with_mentions(found_items):
     users_to_notify = set()
 
     for item in found_items:
@@ -131,12 +130,11 @@ async def reply_with_mentions(found_items, original_message_id):
         try:
             await bot.send_message(
                 chat_id=DISCUSSION_ID,
-                text=text,
-                reply_to_message_id=original_message_id
+                text=text
             )
-            print("✅ Mention reply sent.")
+            print("✅ Mention sent to discussion.")
         except Exception as e:
-            print("❌ Failed to send reply with mentions:", e)
+            print("❌ Failed to send mention to discussion:", e)
 
 async def check_and_post_updates():
     global last_posted_data
@@ -149,7 +147,7 @@ async def check_and_post_updates():
         print("New stock update found. Sending...")
         message_id = await send_stock_to_telegram(message)
         if message_id:
-            await reply_with_mentions(found_items, message_id)
+            await reply_with_mentions(found_items)
         last_posted_data = message
     else:
         print("Stock unchanged. No message sent.")
