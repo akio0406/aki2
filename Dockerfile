@@ -26,5 +26,9 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 # 5) Runtime
 ENV API_KEY=changeme
-EXPOSE 8000
-CMD ["uvicorn", "server:app", "--host", "0.0.0.0", "--port", "8000"]
+
+# Expose the port Railway assigns (fallback to 8000 locally)
+EXPOSE ${PORT:-8000}
+
+# Launch Uvicorn on the correct port
+CMD ["sh", "-c", "uvicorn server:app --host 0.0.0.0 --port ${PORT:-8000}"]
