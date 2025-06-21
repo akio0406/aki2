@@ -9,24 +9,19 @@ RUN apt-get update && \
       libxrandr2 libasound2 libpangocairo-1.0-0 libcups2 libgtk-3-0 \
     && rm -rf /var/lib/apt/lists/*
 
-# 2) Install Chrome
+# 2) Install Google Chrome
 RUN wget -q -O /tmp/chrome.deb \
       https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb && \
     apt-get update && apt-get install -y /tmp/chrome.deb && \
     rm /tmp/chrome.deb
 
-# 3) Install matching Chromedriver via LATEST_RELEASE API
+# 3) Install matching Chromedriver (major-only lookup)
 RUN set -eux; \
-    # full Chrome version, e.g. 114.0.5735.199
-    CHROME_FULL_VER="$(google-chrome --version | awk '{print $3}')"; \
-    # try exact patch match first
-    DRIVER_VER="$(wget -qO- "https://chromedriver.storage.googleapis.com/LATEST_RELEASE_${CHROME_FULL_VER}")"; \
-    if [ -z "$DRIVER_VER" ]; then \
-      # fallback to major version only
-      CHROME_MAJOR="$(echo $CHROME_FULL_VER | cut -d. -f1)"; \
-      DRIVER_VER="$(wget -qO- "https://chromedriver.storage.googleapis.com/LATEST_RELEASE_${CHROME_MAJOR}")"; \
-    fi; \
-    echo "Installing Chromedriver $DRIVER_VER for Chrome $CHROME_FULL_VER"; \
+    # grab Chrome major version, e.g. "114" from "Google Chrome 114.0.5735.199" \
+    CHROME_MAJOR="$(google-chrome --version | awk '{print $3}' | cut -d. -f1)"; \
+    # query the latest driver for that major version \
+    DRIVER_VER="$(wget -qO- "https://chromedriver.storage.googleapis.com/LATEST_RELEASE_${CHROME_MAJOR}")"; \
+    echo "Installing Chromedriver $DRIVER_VER (for Chrome major $CHROME_MAJOR)"; \
     wget -qO /tmp/chromedriver.zip \
       "https://chromedriver.storage.googleapis.com/${DRIVER_VER}/chromedriver_linux64.zip"; \
     unzip /tmp/chromedriver.zip -d /usr/local/bin; \
@@ -35,13 +30,13 @@ RUN set -eux; \
 
 WORKDIR /app
 
-# 4) Copy application code + requirements
+# 4) Copy code + requirements
 COPY server.py countries.py requirements.txt ./
 
 # 5) Install Python dependencies
 RUN pip install --no-cache-dir -r requirements.txt
 
-# 6) Runtime configuration
+# 6) Runtime settings
 ENV API_KEY=changeme
 EXPOSE 8000
 
