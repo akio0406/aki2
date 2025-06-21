@@ -1,7 +1,7 @@
 # Dockerfile
 FROM python:3.11-slim
 
-# 1) System deps + Chrome dependencies
+# 1) System deps for Chrome
 RUN apt-get update && \
     apt-get install -y \
       wget unzip xvfb \
@@ -15,29 +15,16 @@ RUN wget -q -O /tmp/chrome.deb \
     apt-get update && apt-get install -y /tmp/chrome.deb && \
     rm /tmp/chrome.deb
 
-# 3) Install matching Chromedriver (major-only lookup)
-RUN set -eux; \
-    # grab Chrome major version, e.g. "114" from "Google Chrome 114.0.5735.199" \
-    CHROME_MAJOR="$(google-chrome --version | awk '{print $3}' | cut -d. -f1)"; \
-    # query the latest driver for that major version \
-    DRIVER_VER="$(wget -qO- "https://chromedriver.storage.googleapis.com/LATEST_RELEASE_${CHROME_MAJOR}")"; \
-    echo "Installing Chromedriver $DRIVER_VER (for Chrome major $CHROME_MAJOR)"; \
-    wget -qO /tmp/chromedriver.zip \
-      "https://chromedriver.storage.googleapis.com/${DRIVER_VER}/chromedriver_linux64.zip"; \
-    unzip /tmp/chromedriver.zip -d /usr/local/bin; \
-    chmod +x /usr/local/bin/chromedriver; \
-    rm /tmp/chromedriver.zip
-
 WORKDIR /app
 
-# 4) Copy code + requirements
+# 3) Copy application code + requirements
 COPY server.py countries.py requirements.txt ./
 
-# 5) Install Python dependencies
+# 4) Install Python dependencies
+#    Make sure your requirements.txt pins selenium>=4.7
 RUN pip install --no-cache-dir -r requirements.txt
 
-# 6) Runtime settings
+# 5) Runtime
 ENV API_KEY=changeme
 EXPOSE 8000
-
 CMD ["uvicorn", "server:app", "--host", "0.0.0.0", "--port", "8000"]
